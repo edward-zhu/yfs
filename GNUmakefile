@@ -125,7 +125,7 @@ fuse.o: fuse.cc
 clean_files=rpc/rpctest rpc/*.o rpc/*.d rpc/librpc.a *.o *.d yfs_client extent_server lock_server lock_tester lock_demo rpctest test-lab-3-b test-lab-3-c rsm_tester
 .PHONY: clean handin
 clean: 
-	rm $(clean_files) -rf 
+	rm -rf $(clean_files)
 
 handin_ignore=$(clean_files) core* *log
 handin_file=$(shell whoami)-lab$(LAB).tgz
