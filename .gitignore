@@ -6,3 +6,5 @@
 *.o
 *.dSYM
 tags
+*.log
+.DS_STORE

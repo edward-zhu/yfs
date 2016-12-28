@@ -29,11 +29,35 @@ class yfs_client {
   struct dirent {
     std::string name;
     yfs_client::inum inum;
+
+    dirent() {}
+
+    dirent(const std::string & from) {
+      size_t pos = from.find(':');
+      if (pos == from.npos || pos == from.size() - 1) return;
+      name = from.substr(0, pos);
+      inum = stoul(from.substr(pos + 1, from.npos));
+    }
+
+    dirent(const std::string & name, yfs_client::inum inum) {
+      this->name = name;
+      this->inum = inum;
+    }
+
+    const std::string str() const {
+      return name + ":" + std::to_string(inum);
+    }
+
+    bool valid() {
+      return !name.empty();
+    }
   };
 
  private:
   static std::string filename(inum);
   static inum n2i(std::string);
+  static bool find(const std::vector<dirent> &, const std::string &, inum *);
+  static bool contains(const std::vector<dirent> &, const std::string &);
  public:
 
   yfs_client(std::string, std::string);
@@ -43,6 +67,10 @@ class yfs_client {
 
   int getfile(inum, fileinfo &);
   int getdir(inum, dirinfo &);
+  int lookup(inum, const std::string &, inum *);
+  int create(inum, const std::string &, inum);
+  int readdir(inum, std::vector<dirent> &);
+  int writedir(inum, const std::vector<dirent> &);
 };
 
-#endif 
+#endif

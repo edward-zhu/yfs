@@ -1,9 +1,7 @@
 #ifndef rpc_h
 #define rpc_h
 
-#ifdef __APPLE__
 #include <unistd.h>
-#endif
 
 #include <sys/socket.h>
 #include <netinet/in.h>
