@@ -16,7 +16,13 @@
 yfs_client::yfs_client(std::string extent_dst, std::string lock_dst)
 {
   ec = new extent_client(extent_dst);
+  lc = new lock_client(lock_dst);
+}
 
+yfs_client::~yfs_client()
+{
+  delete ec;
+  delete lc;
 }
 
 yfs_client::inum
@@ -56,7 +62,7 @@ yfs_client::getfile(inum inum, fileinfo &fin)
   int r = OK;
   // You modify this function for Lab 3
   // - hold and release the file lock
-
+  ScopedNLock l(lc, inum);
   printf("getfile %016llx\n", inum);
   extent_protocol::attr a;
   if (ec->getattr(inum, a) != extent_protocol::OK) {
@@ -81,7 +87,7 @@ yfs_client::getdir(inum inum, dirinfo &din)
   int r = OK;
   // You modify this function for Lab 3
   // - hold and release the directory lock
-
+  ScopedNLock l(lc, inum);
   printf("getdir %016llx\n", inum);
   extent_protocol::attr a;
   if (ec->getattr(inum, a) != extent_protocol::OK) {
@@ -137,9 +143,10 @@ yfs_client::contains(const std::vector<dirent> &vec, const std::string & name) {
 
 int
 yfs_client::lookup(inum parent, const std::string & name, yfs_client::inum * inum) {
+  ScopedNLock l(lc, parent);
   printf("[YFS CLI] lookup %016llx name %s\n", parent, name.c_str());
   std::vector<dirent> ents;
-  int ret = readdir(parent, ents);
+  int ret = _readdir(parent, ents);
   if (ret != OK) {
     return ret;
   }
@@ -154,10 +161,11 @@ yfs_client::lookup(inum parent, const std::string & name, yfs_client::inum * inu
 
 int
 yfs_client::create(inum inum, const std::string & name, yfs_client::inum parent) {
-  printf("[YFS CLI] create %016llx\n", inum);
+  ScopedNLock l(lc, parent);
+  printf("[YFS CLI] create %s in %016llx\n", name.c_str(), parent);
   std::vector<dirent> ents;
   yfs_client::status ret;
-  if ((ret = readdir(parent, ents)) != OK) {
+  if ((ret = _readdir(parent, ents)) != OK) {
     return ret;
   }
   if (contains(ents, name)) {
@@ -169,7 +177,7 @@ yfs_client::create(inum inum, const std::string & name, yfs_client::inum parent)
     return IOERR;
   }
 
-  if ((ret = writedir(parent, ents)) != OK) {
+  if ((ret = _writedir(parent, ents)) != OK) {
     return ret;
   }
   return OK;
@@ -177,11 +185,14 @@ yfs_client::create(inum inum, const std::string & name, yfs_client::inum parent)
 
 int
 yfs_client::remove(inum parent, const std::string & name) {
+  ScopedNLock l(lc, parent);
   std::vector<dirent> ents;
   status ret;
-  if ((ret = readdir(parent, ents)) != OK) {
+  if ((ret = _readdir(parent, ents)) != OK) {
     return ret;
   }
+
+  printf("[YFS CLI] remove %s in %016llx\n", name.c_str(), parent);
 
   inum inum;
   bool exist = _remove(ents, name, &inum);
@@ -198,7 +209,7 @@ yfs_client::remove(inum parent, const std::string & name) {
     return IOERR;
   }
 
-  if ((ret = writedir(parent, ents)) != OK) {
+  if ((ret = _writedir(parent, ents)) != OK) {
     return ret;
   }
 
@@ -206,7 +217,7 @@ yfs_client::remove(inum parent, const std::string & name) {
 }
 
 int
-yfs_client::readdir(inum inum, std::vector<dirent> &vec) {
+yfs_client::_readdir(inum inum, std::vector<dirent> &vec) {
   int r = OK;
   printf("[YFS CLI] readdir %016llx\n", inum);
   int ec_ret;
@@ -235,7 +246,13 @@ yfs_client::readdir(inum inum, std::vector<dirent> &vec) {
 }
 
 int
-yfs_client::writedir(inum inum, const std::vector<dirent> & vec) {
+yfs_client::readdir(inum inum, std::vector<dirent> &vec) {
+  ScopedNLock l(lc, inum);
+  return _readdir(inum, vec);
+}
+
+int
+yfs_client::_writedir(inum inum, const std::vector<dirent> & vec) {
   int r = OK;
   printf("[YFS CLI] writedir %016llx\n", inum);
 
@@ -256,7 +273,14 @@ yfs_client::writedir(inum inum, const std::vector<dirent> & vec) {
 }
 
 int
+yfs_client::writedir(inum inum, const std::vector<dirent> & vec) {
+  ScopedNLock l(lc, inum);
+  return _writedir(inum, vec);
+}
+
+int
 yfs_client::resize(inum inum, unsigned int size) {
+  ScopedNLock l(lc, inum);
   std::string buf;
   int ec_ret;
   if ((ec_ret = ec->get(inum, buf)) != extent_protocol::OK) {
@@ -277,6 +301,7 @@ yfs_client::resize(inum inum, unsigned int size) {
 
 int
 yfs_client::read(inum inum, size_t size, size_t off, std::string & buf) {
+  ScopedNLock l(lc, inum);
   std::string orig;
   int ec_ret;
   if ((ec_ret = ec->get(inum, orig)) != extent_protocol::OK) {
@@ -296,6 +321,7 @@ yfs_client::read(inum inum, size_t size, size_t off, std::string & buf) {
 
 int
 yfs_client::write(inum inum, const char * buf, size_t size, size_t off, size_t * nsize) {
+  ScopedNLock l(lc, inum);
   std::string orig;
   int ec_ret;
   if ((ec_ret = ec->get(inum, orig)) != extent_protocol::OK) {

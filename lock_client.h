@@ -20,5 +20,23 @@ class lock_client {
   virtual lock_protocol::status stat(lock_protocol::lockid_t);
 };
 
+class ScopedNLock {
+ private:
+  lock_client * lc;
+  lock_protocol::lockid_t lid;
+ public:
+  ScopedNLock(lock_client * lc, lock_protocol::lockid_t lid) {
+    this->lc = lc;
+    this->lid = lid;
+    printf("[LOCK SRV] acquire %llu\n", lid);
+    lc->acquire(lid);
+  }
 
-#endif 
+  ~ScopedNLock() {
+    printf("[LOCK SRV] release %llu\n", lid);
+    lc->release(lid);
+  }
+};
+
+
+#endif

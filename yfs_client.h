@@ -11,6 +11,7 @@
 
 class yfs_client {
   extent_client *ec;
+  lock_client *lc;
  public:
 
   typedef unsigned long long inum;
@@ -61,9 +62,12 @@ class yfs_client {
   static bool find(const std::vector<dirent> &, const std::string &, inum *);
   static bool contains(const std::vector<dirent> &, const std::string &);
   static bool _remove(std::vector<dirent> &, const std::string &, inum *);
+  int _readdir(inum, std::vector<dirent> &);
+  int _writedir(inum, const std::vector<dirent> &);
  public:
 
   yfs_client(std::string, std::string);
+  ~yfs_client();
 
   bool isfile(inum);
   bool isdir(inum);
