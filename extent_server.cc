@@ -41,10 +41,10 @@ int extent_server::put(extent_protocol::extentid_t id, std::string buf, int & r)
   // if this node exist
   printf("[EXT SERVER] replace: %s\n", buf.c_str());
   node & n = (*it).second;
+  n.attr.ctime = now;
   n.attr.mtime = now;
   n.buf = buf;
   n.attr.size = static_cast<unsigned int>(buf.size());
-
   return extent_protocol::OK;
 }
 

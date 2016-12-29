@@ -112,6 +112,25 @@ yfs_client::find(const std::vector<dirent> &vec,
 }
 
 bool
+yfs_client::_remove(std::vector<dirent> &vec, const std::string & name, inum * inum) {
+  auto it = vec.begin();
+  for (; it != vec.end(); it++) {
+    if ((*it).name == name) {
+      (*inum) = (*it).inum;
+      break;
+    }
+  }
+
+  if (it != vec.end()) {
+    vec.erase(it);
+    return true;
+  }
+  else {
+    return false;
+  }
+}
+
+bool
 yfs_client::contains(const std::vector<dirent> &vec, const std::string & name) {
   return find(vec, name, NULL);
 }
@@ -153,6 +172,36 @@ yfs_client::create(inum inum, const std::string & name, yfs_client::inum parent)
   if ((ret = writedir(parent, ents)) != OK) {
     return ret;
   }
+  return OK;
+}
+
+int
+yfs_client::remove(inum parent, const std::string & name) {
+  std::vector<dirent> ents;
+  status ret;
+  if ((ret = readdir(parent, ents)) != OK) {
+    return ret;
+  }
+
+  inum inum;
+  bool exist = _remove(ents, name, &inum);
+
+  if (!exist) {
+    return NOENT;
+  }
+
+  int ec_ret;
+  if ((ec_ret = ec->remove(inum)) != extent_protocol::OK) {
+    if (ec_ret == extent_protocol::NOENT) {
+      return NOENT;
+    }
+    return IOERR;
+  }
+
+  if ((ret = writedir(parent, ents)) != OK) {
+    return ret;
+  }
+
   return OK;
 }
 

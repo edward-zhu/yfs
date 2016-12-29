@@ -60,6 +60,7 @@ class yfs_client {
   static inum n2i(std::string);
   static bool find(const std::vector<dirent> &, const std::string &, inum *);
   static bool contains(const std::vector<dirent> &, const std::string &);
+  static bool _remove(std::vector<dirent> &, const std::string &, inum *);
  public:
 
   yfs_client(std::string, std::string);
@@ -71,6 +72,7 @@ class yfs_client {
   int getdir(inum, dirinfo &);
   int lookup(inum, const std::string &, inum *);
   int create(inum, const std::string &, inum);
+  int remove(inum, const std::string &);
   int readdir(inum, std::vector<dirent> &);
   int writedir(inum, const std::vector<dirent> &);
   int resize(inum, unsigned int);

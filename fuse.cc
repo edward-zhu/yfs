@@ -226,6 +226,13 @@ pick_new_file_inum() {
   return inum;
 }
 
+yfs_client::inum
+pick_new_dir_inum() {
+  yfs_client::inum inum = random();
+  inum &= 0x7FFFFFFF;
+  return inum;
+}
+
 //
 // Create file @name in directory @parent.
 //
@@ -447,7 +454,24 @@ fuseserver_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name,
   (void) e;
 
   // You fill this in for Lab 3
-#if 0
+#if 1
+  yfs_client::inum inum = pick_new_dir_inum();
+  yfs_client::status ret;
+
+  if ((ret = yfs->create(inum, name, parent)) != yfs_client::OK) {
+    if (ret == yfs_client::EXIST) {
+      fuse_reply_err(req, EEXIST);
+    }
+    else {
+      fuse_reply_err(req, EIO);
+    }
+    return;
+  }
+  e.ino = inum;
+  ret = getattr(inum, e.attr);
+  if (ret != yfs_client::OK) {
+    fuse_reply_err(req, EIO);
+  }
   fuse_reply_entry(req, &e);
 #else
   fuse_reply_err(req, ENOSYS);
@@ -468,7 +492,17 @@ fuseserver_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
   // You fill this in for Lab 3
   // Success:	fuse_reply_err(req, 0);
   // Not found:	fuse_reply_err(req, ENOENT);
-  fuse_reply_err(req, ENOSYS);
+  yfs_client::status ret;
+  if ((ret = yfs->remove(parent, name)) != yfs_client::OK) {
+    if (ret == yfs_client::NOENT) {
+      fuse_reply_err(req, ENOENT);
+    }
+    else {
+      fuse_reply_err(req, EIO);
+    }
+    return;
+  }
+  fuse_reply_err(req, 0);
 }
 
 void
