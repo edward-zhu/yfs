@@ -5,9 +5,19 @@
 
 #include <string>
 #include <map>
+#include <pthread.h>
 #include "extent_protocol.h"
 
 class extent_server {
+ private:
+  struct node {
+    extent_protocol::attr attr;
+    std::string buf;
+  };
+
+  std::map<extent_protocol::extentid_t, node> ext_map_;
+  pthread_mutex_t _m;
+  int nacquire;
 
  public:
   extent_server();
@@ -18,11 +28,4 @@ class extent_server {
   int remove(extent_protocol::extentid_t id, int &);
 };
 
-#endif 
-
-
-
-
-
-
-
+#endif
