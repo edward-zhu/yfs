@@ -71,6 +71,9 @@ class yfs_client {
   int create(inum, const std::string &, inum);
   int readdir(inum, std::vector<dirent> &);
   int writedir(inum, const std::vector<dirent> &);
+  int resize(inum, unsigned int);
+  int write(inum, const char * buf, size_t, size_t, size_t *);
+  int read(inum, size_t, size_t, std::string &);
 };
 
 #endif

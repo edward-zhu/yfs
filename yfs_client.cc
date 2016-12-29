@@ -200,3 +200,64 @@ yfs_client::writedir(inum inum, const std::vector<dirent> & vec) {
   }
   return r;
 }
+
+int
+yfs_client::resize(inum inum, unsigned int size) {
+  std::string buf;
+  int ec_ret;
+  if ((ec_ret = ec->get(inum, buf)) != extent_protocol::OK) {
+    if (ec_ret == extent_protocol::NOENT) {
+      return NOENT;
+    }
+    return IOERR;
+  }
+
+  buf.resize(size);
+
+  if ((ec_ret = ec->put(inum, buf)) != extent_protocol::OK) {
+    return IOERR;
+  }
+
+  return OK;
+}
+
+int
+yfs_client::read(inum inum, size_t size, size_t off, std::string & buf) {
+  std::string orig;
+  int ec_ret;
+  if ((ec_ret = ec->get(inum, orig)) != extent_protocol::OK) {
+    if (ec_ret == extent_protocol::NOENT) return NOENT;
+    return IOERR;
+  }
+
+  if (off > orig.length()) {
+    buf = "";
+  }
+  else {
+    buf = orig.substr(off, size);
+  }
+
+  return OK;
+}
+
+int
+yfs_client::write(inum inum, const char * buf, size_t size, size_t off, size_t * nsize) {
+  std::string orig;
+  int ec_ret;
+  if ((ec_ret = ec->get(inum, orig)) != extent_protocol::OK) {
+    if (ec_ret == extent_protocol::NOENT) return NOENT;
+    return IOERR;
+  }
+  printf("[YFS CLI] write file original size: %lu, write: %lu, offset: " \
+      "%lu\n", orig.length(), size, off);
+  if (off > orig.length()) {
+    orig.resize(off + size);
+  }
+  orig.replace(off, size, buf, size);
+  if ((ec_ret = ec->put(inum, orig)) != extent_protocol::OK) {
+    return IOERR;
+  }
+  printf("[YFS CLI] write file succeed! size : %lu.\n", orig.length());
+  (*nsize) = size;
+  return OK;
+}
