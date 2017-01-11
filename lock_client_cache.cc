@@ -133,7 +133,7 @@ lock_client_cache::revoke_handler(lock_protocol::lockid_t lid,
   tprintf("[LOCK CLI] %s got revoke request for lock %llu.\n", id.c_str(), lid);
   int ret = rlock_protocol::OK;
   r = rlock_protocol::OK;
-  usleep(2000);
+  // usleep(2000);
   {
     ScopedLock l(&_m);
     while (!_wait_set[lid].empty()) {
