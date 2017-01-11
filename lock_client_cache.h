@@ -48,7 +48,6 @@ class lock_client_cache : public lock_client {
   std::map<lock_protocol::lockid_t, pthread_cond_t> _emp_cond;
 
   std::map<lock_protocol::lockid_t, std::unordered_set<pthread_t>> _wait_set;
-  std::map<lock_protocol::lockid_t, std::queue<pthread_t>> _wait_queue;
 
   std::map<lock_protocol::lockid_t, bool> _retry_flag;
 
