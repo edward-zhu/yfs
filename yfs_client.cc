@@ -143,7 +143,7 @@ yfs_client::contains(const std::vector<dirent> &vec, const std::string & name) {
 
 int
 yfs_client::lookup(inum parent, const std::string & name, yfs_client::inum * inum) {
-  ScopedNLock l(lc, parent);
+  // ScopedNLock l(lc, parent);
   printf("[YFS CLI] lookup %016llx name %s\n", parent, name.c_str());
   std::vector<dirent> ents;
   int ret = _readdir(parent, ents);
@@ -247,7 +247,7 @@ yfs_client::_readdir(inum inum, std::vector<dirent> &vec) {
 
 int
 yfs_client::readdir(inum inum, std::vector<dirent> &vec) {
-  ScopedNLock l(lc, inum);
+  // ScopedNLock l(lc, inum);
   return _readdir(inum, vec);
 }
 
