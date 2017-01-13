@@ -301,7 +301,7 @@ yfs_client::resize(inum inum, unsigned int size) {
 
 int
 yfs_client::read(inum inum, size_t size, size_t off, std::string & buf) {
-  ScopedNLock l(lc, inum);
+  // ScopedNLock l(lc, inum);
   std::string orig;
   int ec_ret;
   if ((ec_ret = ec->get(inum, orig)) != extent_protocol::OK) {
