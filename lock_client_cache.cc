@@ -144,6 +144,7 @@ lock_client_cache::revoke_handler(lock_protocol::lockid_t lid,
   }
   int rr;
   tprintf("[LOCK CLI] %s is giving up lock %llu.\n", id.c_str(), lid);
+  lu->dorelease(lid);
   cl->call(lock_protocol::release, lid, id, rr);
   {
     ScopedLock l(&_m);

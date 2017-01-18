@@ -1,7 +1,6 @@
 // yfs client.  implements FS operations using extent and lock server
 #include "yfs_client.h"
 #include "extent_client.h"
-#include "lock_client_cache.h"
 #include <sstream>
 #include <iostream>
 #include <stdio.h>
@@ -12,15 +11,16 @@
 
 #include "utils/utils.h"
 
-
 yfs_client::yfs_client(std::string extent_dst, std::string lock_dst)
 {
   ec = new extent_client(extent_dst);
-  lc = dynamic_cast<lock_client *>(new lock_client_cache(lock_dst));
+  ylru = dynamic_cast<lock_release_user *>(new yfs_lock_release_user(ec));
+  lc = dynamic_cast<lock_client *>(new lock_client_cache(lock_dst, ylru));
 }
 
 yfs_client::~yfs_client()
 {
+  delete ylru;
   delete ec;
   delete lc;
 }
@@ -143,7 +143,7 @@ yfs_client::contains(const std::vector<dirent> &vec, const std::string & name) {
 
 int
 yfs_client::lookup(inum parent, const std::string & name, yfs_client::inum * inum) {
-  // ScopedNLock l(lc, parent);
+  ScopedNLock l(lc, parent);
   printf("[YFS CLI] lookup %016llx name %s\n", parent, name.c_str());
   std::vector<dirent> ents;
   int ret = _readdir(parent, ents);
@@ -247,7 +247,7 @@ yfs_client::_readdir(inum inum, std::vector<dirent> &vec) {
 
 int
 yfs_client::readdir(inum inum, std::vector<dirent> &vec) {
-  // ScopedNLock l(lc, inum);
+  ScopedNLock l(lc, inum);
   return _readdir(inum, vec);
 }
 
@@ -301,7 +301,7 @@ yfs_client::resize(inum inum, unsigned int size) {
 
 int
 yfs_client::read(inum inum, size_t size, size_t off, std::string & buf) {
-  // ScopedNLock l(lc, inum);
+  ScopedNLock l(lc, inum);
   std::string orig;
   int ec_ret;
   if ((ec_ret = ec->get(inum, orig)) != extent_protocol::OK) {

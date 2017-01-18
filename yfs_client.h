@@ -7,11 +7,24 @@
 #include <vector>
 
 #include "lock_protocol.h"
-#include "lock_client.h"
+#include "lock_client_cache.h"
+
+class yfs_lock_release_user : public lock_release_user {
+  extent_client * ec;
+
+ public:
+  yfs_lock_release_user(extent_client * _ec) : ec(_ec) {}
+
+  virtual void dorelease(lock_protocol::lockid_t lid) {
+    ec->flush(lid);
+  }
+};
 
 class yfs_client {
   extent_client *ec;
   lock_client *lc;
+  lock_release_user * ylru;
+
  public:
 
   typedef unsigned long long inum;
