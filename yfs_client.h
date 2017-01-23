@@ -7,10 +7,24 @@
 #include <vector>
 
 #include "lock_protocol.h"
-#include "lock_client.h"
+#include "lock_client_cache.h"
+
+class yfs_lock_release_user : public lock_release_user {
+  extent_client * ec;
+
+ public:
+  yfs_lock_release_user(extent_client * _ec) : ec(_ec) {}
+
+  virtual void dorelease(lock_protocol::lockid_t lid) {
+    ec->flush(lid);
+  }
+};
 
 class yfs_client {
   extent_client *ec;
+  lock_client *lc;
+  lock_release_user * ylru;
+
  public:
 
   typedef unsigned long long inum;
@@ -31,20 +45,56 @@ class yfs_client {
   struct dirent {
     std::string name;
     yfs_client::inum inum;
+
+    dirent() {}
+
+    dirent(const std::string & from) {
+      size_t pos = from.find(':');
+      if (pos == from.npos || pos == from.size() - 1) return;
+      name = from.substr(0, pos);
+      inum = stoul(from.substr(pos + 1, from.npos));
+    }
+
+    dirent(const std::string & name, yfs_client::inum inum) {
+      this->name = name;
+      this->inum = inum;
+    }
+
+    const std::string str() const {
+      return name + ":" + std::to_string(inum);
+    }
+
+    bool valid() {
+      return !name.empty();
+    }
   };
 
  private:
   static std::string filename(inum);
   static inum n2i(std::string);
+  static bool find(const std::vector<dirent> &, const std::string &, inum *);
+  static bool contains(const std::vector<dirent> &, const std::string &);
+  static bool _remove(std::vector<dirent> &, const std::string &, inum *);
+  int _readdir(inum, std::vector<dirent> &);
+  int _writedir(inum, const std::vector<dirent> &);
  public:
 
   yfs_client(std::string, std::string);
+  ~yfs_client();
 
   bool isfile(inum);
   bool isdir(inum);
 
   int getfile(inum, fileinfo &);
   int getdir(inum, dirinfo &);
+  int lookup(inum, const std::string &, inum *);
+  int create(inum, const std::string &, inum);
+  int remove(inum, const std::string &);
+  int readdir(inum, std::vector<dirent> &);
+  int writedir(inum, const std::vector<dirent> &);
+  int resize(inum, unsigned int);
+  int write(inum, const char * buf, size_t, size_t, size_t *);
+  int read(inum, size_t, size_t, std::string &);
 };
 
-#endif 
+#endif

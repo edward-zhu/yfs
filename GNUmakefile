@@ -7,13 +7,8 @@ LAB4GE=$(shell expr $(LAB) \>\= 4)
 LAB5GE=$(shell expr $(LAB) \>\= 5)
 LAB6GE=$(shell expr $(LAB) \>\= 6)
 LAB7GE=$(shell expr $(LAB) \>\= 7)
-CXXFLAGS =  -g -MMD -Wall -I. -I$(RPC) -DLAB=$(LAB) -DSOL=$(SOL) -D_FILE_OFFSET_BITS=64
+CXXFLAGS =  -g -MMD -Wall -I. -I$(RPC) -DLAB=$(LAB) -DSOL=$(SOL) -D_FILE_OFFSET_BITS=64 -std=c++11
 FUSEFLAGS= -D_FILE_OFFSET_BITS=64 -DFUSE_USE_VERSION=25 -I/usr/local/include/fuse -I/usr/include/fuse
-ifeq ($(shell uname -s),Darwin)
-  MACFLAGS= -D__FreeBSD__=10
-else
-  MACFLAGS=
-endif
 LDFLAGS = -L. -L/usr/local/lib
 LDLIBS = -lpthread 
 ifeq ($(LAB2GE),1)
@@ -86,7 +81,7 @@ endif
 
 lock_server : $(patsubst %.cc,%.o,$(lock_server)) rpc/librpc.a
 
-yfs_client=yfs_client.cc extent_client.cc fuse.cc
+yfs_client=yfs_client.cc extent_client.cc fuse.cc utils/utils.cc
 ifeq ($(LAB3GE),1)
   yfs_client += lock_client.cc
 endif
@@ -125,7 +120,7 @@ fuse.o: fuse.cc
 clean_files=rpc/rpctest rpc/*.o rpc/*.d rpc/librpc.a *.o *.d yfs_client extent_server lock_server lock_tester lock_demo rpctest test-lab-3-b test-lab-3-c rsm_tester
 .PHONY: clean handin
 clean: 
-	rm $(clean_files) -rf 
+	rm -rf $(clean_files)
 
 handin_ignore=$(clean_files) core* *log
 handin_file=$(shell whoami)-lab$(LAB).tgz
