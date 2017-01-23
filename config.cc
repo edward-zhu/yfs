@@ -1,6 +1,7 @@
 #include <sstream>
 #include <iostream>
 #include <stdio.h>
+#include "rpc/slock.h"
 #include "config.h"
 #include "paxos.h"
 #include "handle.h"
@@ -47,11 +48,11 @@ heartbeatthread(void *x)
   return 0;
 }
 
-config::config(std::string _first, std::string _me, config_view_change *_vc) 
+config::config(std::string _first, std::string _me, config_view_change *_vc)
   : myvid (0), first (_first), me (_me), vc (_vc)
 {
   VERIFY (pthread_mutex_init(&cfg_mutex, NULL) == 0);
-  VERIFY(pthread_cond_init(&config_cond, NULL) == 0);  
+  VERIFY(pthread_cond_init(&config_cond, NULL) == 0);
 
   std::ostringstream ost;
   ost << me;
@@ -141,7 +142,7 @@ config::paxos_commit(unsigned instance, std::string value)
   ScopedLock ml(&cfg_mutex);
 
   newmem = members(value);
-  tprintf("config::paxos_commit: %d: %s\n", instance, 
+  tprintf("config::paxos_commit: %d: %s\n", instance,
 	 print_members(newmem).c_str());
 
   for (unsigned i = 0; i < mems.size(); i++) {
@@ -231,7 +232,7 @@ config::heartbeater()
   unsigned vid;
   std::vector<std::string> cmems;
   ScopedLock ml(&cfg_mutex);
-  
+
   while (1) {
 
     gettimeofday(&now, NULL);
@@ -270,7 +271,7 @@ config::heartbeater()
       }
     } else {
       //the rest of the nodes ping the one with smallest id
-	if ((h = doheartbeat(m)) != OK) 
+	if ((h = doheartbeat(m)) != OK)
 	    stable = false;
     }
 
@@ -311,16 +312,16 @@ config::doheartbeat(std::string m)
   VERIFY(pthread_mutex_unlock(&cfg_mutex)==0);
   rpcc *cl = h.safebind();
   if (cl) {
-    ret = cl->call(paxos_protocol::heartbeat, me, vid, r, 
+    ret = cl->call(paxos_protocol::heartbeat, me, vid, r,
 	           rpcc::to(1000));
-  } 
+  }
   VERIFY(pthread_mutex_lock(&cfg_mutex)==0);
   if (ret != paxos_protocol::OK) {
-    if (ret == rpc_const::atmostonce_failure || 
+    if (ret == rpc_const::atmostonce_failure ||
 	ret == rpc_const::oldsrv_failure) {
       mgr.delete_handle(m);
     } else {
-      tprintf("doheartbeat: problem with %s (%d) my vid %d his vid %d\n", 
+      tprintf("doheartbeat: problem with %s (%d) my vid %d his vid %d\n",
 	     m.c_str(), ret, vid, r);
       if (ret < 0) res = FAILURE;
       else res = VIEWERR;
