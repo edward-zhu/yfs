@@ -13,7 +13,7 @@
 lock_client_cache::lock_client_cache(std::string xdst,
 				     class lock_release_user *_lu)
   : lock_client(xdst), lu(_lu), _lock_map(), _cond(), _acq_cond(),
-    _rel_cond(), _emp_cond(), _wait_set()
+    _emp_cond(), _wait_set()
 {
   rpcs *rlsrpc = new rpcs(0);
   rlsrpc->reg(rlock_protocol::revoke, this, &lock_client_cache::revoke_handler);
@@ -57,7 +57,6 @@ lock_client_cache::acquire(lock_protocol::lockid_t lid)
         _lock_map[lid] = NONE;
         _cond[lid] = PTHREAD_COND_INITIALIZER;
         _acq_cond[lid] = PTHREAD_COND_INITIALIZER;
-        _rel_cond[lid] = PTHREAD_COND_INITIALIZER;
         _emp_cond[lid] = PTHREAD_COND_INITIALIZER;
       }
       lock_stat stat = _lock_map[lid];
