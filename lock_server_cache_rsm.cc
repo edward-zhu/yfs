@@ -51,6 +51,9 @@ lock_server_cache_rsm::revoker()
     qitem it;
     revoke_queue.deq(&it); // blocking until have one
 
+    if (!rsm->amiprimary()) {
+      continue;
+    }
     // send revoke
     handle h(it.receiver);
     int rr;
@@ -85,6 +88,9 @@ lock_server_cache_rsm::retryer()
     retry_queue.deq(&it);
     int rr;
     rlock_protocol::status rret;
+    if (!rsm->amiprimary()) {
+      continue;
+    }
     handle h(it.receiver);
     if (h.safebind()) {
       tprintf("[LOCK SRV] send retry to %s for lock %llu.\n",

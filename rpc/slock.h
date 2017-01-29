@@ -2,13 +2,16 @@
 #define __SCOPED_LOCK__
 
 #include <pthread.h>
+#include <iostream>
 #include "lang/verify.h"
 struct ScopedLock {
 	private:
 		pthread_mutex_t *m_;
 	public:
 		ScopedLock(pthread_mutex_t *m): m_(m) {
-			VERIFY(pthread_mutex_lock(m_)==0);
+      int ret = pthread_mutex_lock(m_);
+      if (ret != 0) printf("scopedlock returns %d\n", ret);
+			VERIFY(ret==0);
 		}
 		~ScopedLock() {
 			VERIFY(pthread_mutex_unlock(m_)==0);

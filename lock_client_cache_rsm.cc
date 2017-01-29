@@ -41,9 +41,11 @@ lock_client_cache_rsm::lock_client_cache_rsm(std::string xdst,
   // You fill this in Step Two, Lab 7
   // - Create rsmc, and use the object to do RPC
   //   calls instead of the rpcc object of lock_client
-  pthread_t th;
-  int r = pthread_create(&th, NULL, &releasethread, (void *) this);
-  VERIFY (r == 0);
+  rsmc = new rsm_client(xdst);
+  VERIFY(pthread_mutex_init(&_m, NULL) == 0);
+  // pthread_t th;
+  // int r = pthread_create(&th, NULL, &releasethread, (void *) this);
+  // VERIFY (r == 0);
 }
 
 
@@ -100,7 +102,7 @@ lock_client_cache_rsm::acquire(lock_protocol::lockid_t lid)
   while (true) {
     lock_protocol::status r, rret;
     lock_protocol::xid_t xid = ++this->xid;
-    rret = cl->call(lock_protocol::acquire, lid, id, xid, r);
+    rret = rsmc->call(lock_protocol::acquire, lid, id, xid, r);
     tprintf("[LOCK CLI] %s acquire(%llu, %llu) returned with %d\n",
         id.c_str(), lid, xid, r);
     {
@@ -152,7 +154,7 @@ lock_client_cache_rsm::revoke_handler(lock_protocol::lockid_t lid,
   }
   int rr;
   if (lu) lu->dorelease(lid);
-  cl->call(lock_protocol::release, lid, id, xid, rr);
+  rsmc->call(lock_protocol::release, lid, id, xid, rr);
   tprintf("[LOCK CLI] %s release(%llu, %llu) returned with %d\n",
       id.c_str(), lid, xid, rr);
   {
