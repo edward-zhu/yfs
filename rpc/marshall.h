@@ -5,6 +5,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <deque>
 #include <map>
 #include <stdlib.h>
 #include <string.h>
@@ -33,7 +34,7 @@ typedef uint64_t rpc_checksum_t;
 typedef int rpc_sz_t;
 
 enum {
-	//size of initial buffer allocation 
+	//size of initial buffer allocation
 	DEFAULT_RPC_SZ = 1024,
 #if RPC_CHECKSUMMING
 	//size of rpc_header includes a 4-byte int to be filled by tcpchan and uint64_t checksum
@@ -57,9 +58,9 @@ class marshall {
 			_ind = RPC_HEADER_SZ;
 		}
 
-		~marshall() { 
-			if (_buf) 
-				free(_buf); 
+		~marshall() {
+			if (_buf)
+				free(_buf);
 		}
 
 		int size() { return _ind;}
@@ -69,7 +70,7 @@ class marshall {
 		void rawbytes(const char *, int);
 
 		// Return the current content (excluding header) as a string
-		std::string get_content() { 
+		std::string get_content() {
 			return std::string(_buf+RPC_HEADER_SZ,_ind-RPC_HEADER_SZ);
 		}
 
@@ -83,7 +84,7 @@ class marshall {
 		void pack_req_header(const req_header &h) {
 			int saved_sz = _ind;
 			//leave the first 4-byte empty for channel to fill size of pdu
-			_ind = sizeof(rpc_sz_t); 
+			_ind = sizeof(rpc_sz_t);
 #if RPC_CHECKSUMMING
 			_ind += sizeof(rpc_checksum_t);
 #endif
@@ -98,7 +99,7 @@ class marshall {
 		void pack_reply_header(const reply_header &h) {
 			int saved_sz = _ind;
 			//leave the first 4-byte empty for channel to fill size of pdu
-			_ind = sizeof(rpc_sz_t); 
+			_ind = sizeof(rpc_sz_t);
 #if RPC_CHECKSUMMING
 			_ind += sizeof(rpc_checksum_t);
 #endif
@@ -134,7 +135,7 @@ class unmarshall {
 	public:
 		unmarshall(): _buf(NULL),_sz(0),_ind(0),_ok(false) {}
 		unmarshall(char *b, int sz): _buf(b),_sz(sz),_ind(),_ok(true) {}
-		unmarshall(const std::string &s) : _buf(NULL),_sz(0),_ind(0),_ok(false) 
+		unmarshall(const std::string &s) : _buf(NULL),_sz(0),_ind(0),_ok(false)
 		{
 			//take the content which does not exclude a RPC header from a string
 			take_content(s);
@@ -174,7 +175,7 @@ class unmarshall {
 
 		void unpack_req_header(req_header *h) {
 			//the first 4-byte is for channel to fill size of pdu
-			_ind = sizeof(rpc_sz_t); 
+			_ind = sizeof(rpc_sz_t);
 #if RPC_CHECKSUMMING
 			_ind += sizeof(rpc_checksum_t);
 #endif
@@ -188,7 +189,7 @@ class unmarshall {
 
 		void unpack_reply_header(reply_header *h) {
 			//the first 4-byte is for channel to fill size of pdu
-			_ind = sizeof(rpc_sz_t); 
+			_ind = sizeof(rpc_sz_t);
 #if RPC_CHECKSUMMING
 			_ind += sizeof(rpc_checksum_t);
 #endif
@@ -229,6 +230,29 @@ operator>>(unmarshall &u, std::vector<C> &v)
 		v.push_back(z);
 	}
 	return u;
+}
+
+template <class C> marshall &
+operator<<(marshall &m, std::deque<C> v)
+{
+  m << (unsigned int) v.size();
+  for (auto it = v.begin(); it != v.end(); it++) {
+    m << *it;
+  }
+  return m;
+}
+
+template <class C> unmarshall &
+operator>>(unmarshall &u, std::deque<C> &v) {
+  v.clear();
+  unsigned n;
+  u >> n;
+  for (unsigned i = 0; i < n; i++) {
+    C z;
+    u >> z;
+    v.push_back(z);
+  }
+  return u;
 }
 
 template <class A, class B> marshall &

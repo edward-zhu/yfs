@@ -38,6 +38,7 @@ lock_server_cache_rsm::lock_server_cache_rsm(class rsm *_rsm)
   VERIFY (r == 0);
   r = pthread_create(&th, NULL, &retrythread, (void *) this);
   VERIFY (r == 0);
+  rsm->set_state_transfer(this);
 }
 
 void
@@ -144,7 +145,7 @@ int lock_server_cache_rsm::acquire(lock_protocol::lockid_t lid, std::string id,
     // if the client is not in the waiting list
     if (_ws[lid].count(id) == 0) {
       _ws[lid].insert(id);
-      _wq[lid].push(id);
+      _wq[lid].push_back(id);
     }
 
     // can't grant now, please retry
@@ -173,7 +174,7 @@ lock_server_cache_rsm::release(lock_protocol::lockid_t lid, std::string id,
     std::string next = _wq[lid].front();
     // remove from waiting queue
     _ws[lid].erase(next);
-    _wq[lid].pop();
+    _wq[lid].pop_front();
     // set new owner
     _owners[lid]= next;
     tprintf("[LOCK SRV] %s: release %llu, retry %s.\n",
@@ -192,14 +193,31 @@ lock_server_cache_rsm::release(lock_protocol::lockid_t lid, std::string id,
 std::string
 lock_server_cache_rsm::marshal_state()
 {
-  std::ostringstream ost;
-  std::string r;
-  return r;
+  ScopedLock l(&_m);
+  marshall rep;
+
+  rep << _owners;
+  rep << _wq;
+  rep << _latest_req;
+  rep << _latest_res;
+  // rep << revoke_queue;
+  // rep << retry_queue;
+
+  return rep.str();
 }
 
 void
 lock_server_cache_rsm::unmarshal_state(std::string state)
 {
+  ScopedLock l(&_m);
+  unmarshall rep(state);
+  rep >> _owners;
+  rep >> _wq;
+  rep >> _latest_req;
+  rep >> _latest_res;
+
+  // rep >> revoke_queue;
+  // rep >> retry_queue;
 }
 
 lock_protocol::status
@@ -208,5 +226,23 @@ lock_server_cache_rsm::stat(lock_protocol::lockid_t lid, int &r)
   printf("stat request\n");
   r = nacquire;
   return lock_protocol::OK;
+}
+
+marshall & operator<<(marshall &m, const lock_server_cache_rsm::qitem & item) {
+  m << item.sender;
+  m << item.receiver;
+  m << item.lid;
+  m << item.xid;
+
+  return m;
+}
+
+unmarshall & operator>>(unmarshall &u, lock_server_cache_rsm::qitem &item) {
+  u >> item.sender;
+  u >> item.receiver;
+  u >> item.lid;
+  u >> item.xid;
+
+  return u;
 }
 

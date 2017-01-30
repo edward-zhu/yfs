@@ -607,6 +607,7 @@ rpcs::dispatch(djob_t *j)
 
       if(h.clt_nonce > 0){
         // only record replies for clients that require at-most-once logic
+        printf("rpcs::dispatch proc %x\n", proc);
         add_reply(h.clt_nonce, h.xid, b1, sz1);
       }
 
@@ -736,15 +737,25 @@ rpcs::add_reply(unsigned int clt_nonce, unsigned int xid,
       break;
     }
   }
-  // make sure that there is a cache in the reply window
-  VERIFY(it != reply_window_[clt_nonce].end());
 
   // copy buffer
   char * toBuf = new char[sz];
   memcpy(toBuf, b, sz);
-  (*it).buf = toBuf;
-  (*it).cb_present = true;
-  (*it).sz = sz;
+
+  if(it != reply_window_[clt_nonce].end()) {
+    (*it).buf = toBuf;
+    (*it).cb_present = true;
+    (*it).sz = sz;
+  }
+  else {
+    printf("rpcs::add_reply warning: new buffer.\n");
+    reply_t rt(xid);
+    rt.cb_present = true;
+    rt.buf = toBuf;
+    rt.sz = 0;
+    reply_window_[clt_nonce].push_back(rt);
+  }
+
 }
 
   void

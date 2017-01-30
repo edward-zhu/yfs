@@ -167,12 +167,13 @@ proposer::prepare(unsigned instance, std::vector<std::string> &accepts,
       ret = h.safebind()->call(paxos_protocol::preparereq, me, arg, res, rpcc::to(1000));
       tprintf("paxos::manager: %s returns %d \n", n.c_str(), ret);
       if (ret != paxos_protocol::OK) {
-        tprintf("paxos::manager: connect to client %s failed.\n", n.c_str());
+        tprintf("paxos::manager: connect to client %s failed. ret: %d\n", n.c_str(), ret);
         continue;
       }
       if (res.oldinstance) {
         tprintf("paxos::manager: old instance latest: %d\n", res.n_a.n);
-        acc->commit(res.n_a.n, res.v_a);
+        tprintf("paxos::manager: current view: %s,\n", res.v_a.c_str());
+        acc->commit(res.n_a.n, res.n_a.m);
         pthread_mutex_lock(&pxs_mutex);
         return false;
       }
@@ -186,7 +187,7 @@ proposer::prepare(unsigned instance, std::vector<std::string> &accepts,
       }
     }
     if (!h.safebind() || ret != paxos_protocol::OK) {
-      tprintf("paxos::manager: connect to client %s failed.\n", n.c_str());
+      tprintf("paxos::manager: proposer::prepare connect to client %s failed.\n", n.c_str());
     }
   }
   tprintf("paxos::manager: prepare got highest value: %s\n", v.c_str());
@@ -206,6 +207,8 @@ proposer::accept(unsigned instance, std::vector<std::string> &accepts,
   arg.v = v;
   arg.instance = instance;
 
+  std::vector<std::string> acc;
+
   pthread_mutex_unlock(&pxs_mutex);
   for (std::string & n : nodes) {
     handle h(n);
@@ -214,14 +217,15 @@ proposer::accept(unsigned instance, std::vector<std::string> &accepts,
       bool rret;
       ret = h.safebind()->call(paxos_protocol::acceptreq, me, arg, rret, rpcc::to(1000));
       if (rret) {
-        accepts.push_back(n);
+        acc.push_back(n);
       }
     }
     if (!h.safebind() || ret != paxos_protocol::OK) {
-      tprintf("paxos::manager: connect to client %s failed.\n", n.c_str());
+      tprintf("paxos::manager: proposer::accept connect to client %s failed.\n", n.c_str());
     }
   }
   pthread_mutex_lock(&pxs_mutex);
+  accepts.swap(acc);
 }
 
 void
@@ -242,7 +246,7 @@ proposer::decide(unsigned instance, std::vector<std::string> accepts,
       ret = h.safebind()->call(paxos_protocol::decidereq, me, arg, rret, rpcc::to(1000));
     }
     if (!h.safebind() || ret != paxos_protocol::OK) {
-      tprintf("paxos::manager: connect to client %s failed.\n", n.c_str());
+      tprintf("paxos::manager: proposer::decide connect to client %s failed. ret:%d\n", n.c_str(), ret);
     }
   }
   pthread_mutex_lock(&pxs_mutex);
@@ -288,8 +292,8 @@ acceptor::preparereq(std::string src, paxos_protocol::preparearg a,
   if (a.instance <= instance_h) {
     r.oldinstance = true;
     tprintf("preparereq oldinstance given: %u, latest: %u.\n", a.instance, instance_h);
-    r.n_a.n = get_instance_h();
-    r.v_a = instance();
+    r.n_a.n = this->instance_h;
+    r.n_a.m = this->value(this->instance_h);
   }
   else if (a.n > get_n_h()) {
     n_h = a.n;

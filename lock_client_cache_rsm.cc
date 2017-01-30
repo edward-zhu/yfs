@@ -103,6 +103,7 @@ lock_client_cache_rsm::acquire(lock_protocol::lockid_t lid)
     lock_protocol::status r, rret;
     lock_protocol::xid_t xid = ++this->xid;
     rret = rsmc->call(lock_protocol::acquire, lid, id, xid, r);
+    int rc = 0;
     tprintf("[LOCK CLI] %s acquire(%llu, %llu) returned with %d\n",
         id.c_str(), lid, xid, r);
     {
@@ -112,8 +113,11 @@ lock_client_cache_rsm::acquire(lock_protocol::lockid_t lid)
         return ret;
       }
       else if (r == lock_protocol::RETRY) {
-        while (!_retry_flag[lid]) {
-          pthread_cond_wait(&_ac[lid], &_m);
+        while (!_retry_flag[lid] && rc == 0) {
+          struct timespec ts;
+          clock_gettime(CLOCK_REALTIME, &ts);
+          ts.tv_sec += 5;
+          rc = pthread_cond_timedwait(&_ac[lid], &_m, &ts);
         }
         _retry_flag[lid] = false;
       }

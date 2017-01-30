@@ -2,10 +2,11 @@
 #define lock_server_cache_rsm_h
 
 #include <string>
-#include <unordered_map>
-#include <queue>
+#include <map>
+#include <deque>
 #include <unordered_set>
 
+#include "rpc/marshall.h"
 #include "lock_protocol.h"
 #include "rpc/rpc.h"
 #include "rsm_state_transfer.h"
@@ -24,14 +25,15 @@ class lock_server_cache_rsm : public rsm_state_transfer {
   class rsm *rsm;
 
   fifo<qitem> revoke_queue, retry_queue;
-  std::unordered_map<lock_protocol::lockid_t, std::string> _owners;
-  std::unordered_map<lock_protocol::lockid_t, std::queue<std::string>> _wq;
-  std::unordered_map<lock_protocol::lockid_t, std::unordered_set<std::string>> _ws;
+  // std::deque<qitem> _rvq, _rtq;
+  std::map<lock_protocol::lockid_t, std::string> _owners;
+  std::map<lock_protocol::lockid_t, std::deque<std::string>> _wq;
+  std::map<lock_protocol::lockid_t, std::unordered_set<std::string>> _ws;
 
-  std::unordered_map<lock_protocol::lockid_t,
-    std::unordered_map<std::string, lock_protocol::xid_t>> _latest_req;
-  std::unordered_map<lock_protocol::lockid_t,
-    std::unordered_map<std::string, int>> _latest_res;
+  std::map<lock_protocol::lockid_t,
+    std::map<std::string, lock_protocol::xid_t>> _latest_req;
+  std::map<lock_protocol::lockid_t,
+    std::map<std::string, int>> _latest_res;
 
   pthread_mutex_t _m;
 
@@ -46,6 +48,12 @@ class lock_server_cache_rsm : public rsm_state_transfer {
 	      lock_protocol::xid_t, int &);
   int release(lock_protocol::lockid_t, std::string id, lock_protocol::xid_t,
 	      int &);
+  friend marshall & operator<<(marshall &m, const qitem & item);
+  friend unmarshall & operator>>(unmarshall &u, qitem &item);
 };
 
+
+
+
 #endif
+

@@ -4,22 +4,29 @@
 // fifo template
 // blocks enq() and deq() when queue is FULL or EMPTY
 
+#include <stdio.h>
 #include <errno.h>
 #include <list>
 #include <sys/time.h>
 #include <time.h>
 #include <errno.h>
 #include "slock.h"
+#include "marshall.h"
 #include "lang/verify.h"
 
 template<class T>
 class fifo {
 	public:
 		fifo(int m=0);
+    fifo(std::list<T> &);
 		~fifo();
 		bool enq(T, bool blocking=true);
 		void deq(T *);
 		bool size();
+
+    marshall & serialize(marshall &m);
+    unmarshall & deserialize(unmarshall &u);
+
 
 	private:
 		std::list<T> q_;
@@ -28,6 +35,7 @@ class fifo {
 		pthread_cond_t has_space_c_; // q is not longer overfull
 		unsigned int max_; //maximum capacity of the queue, block enq threads if exceeds this limit
 };
+
 
 template<class T>
 fifo<T>::fifo(int limit) : max_(limit)
@@ -38,10 +46,18 @@ fifo<T>::fifo(int limit) : max_(limit)
 }
 
 template<class T>
+fifo<T>::fifo(std::list<T> & l) {
+  q_.swap(l);
+  this(0);
+}
+
+template<class T>
 fifo<T>::~fifo()
 {
 	//fifo is to be deleted only when no threads are using it!
-	VERIFY(pthread_mutex_destroy(&m_)==0);
+	int ret = pthread_mutex_destroy(&m_);
+  printf("fifo destroy ret = %d.\n", ret);
+  VERIFY(ret == 0);
 	VERIFY(pthread_cond_destroy(&non_empty_c_) == 0);
 	VERIFY(pthread_cond_destroy(&has_space_c_) == 0);
 }
@@ -91,4 +107,41 @@ fifo<T>::deq(T *e)
 	return;
 }
 
+template<class T> marshall&
+fifo<T>::serialize(marshall &m) {
+  ScopedLock ml(&m_);
+  m << (unsigned int)q_.size();
+  m << (unsigned int)max_;
+  for (auto it = q_.begin(); it != q_.end(); it++) {
+    m << *it;
+  }
+  return m;
+}
+
+template<class T> unmarshall &
+fifo<T>::deserialize(unmarshall &u) {
+  ScopedLock ml(&m_);
+
+  unsigned n;
+  u >> n;
+  u >> max_;
+  for (unsigned i = 0; i < n; i++) {
+    T z;
+    u >> z;
+    q_.push_back(z);
+  }
+
+  return u;
+}
+
+template<class T> marshall &
+operator<<(marshall &m, fifo<T> & ff)
+{
+  return ff.serialize(m);
+}
+
+template<class T> unmarshall &
+operator>>(unmarshall &u, fifo<T> &ff) {
+  return ff.deserialize(u);
+}
 #endif

@@ -86,6 +86,7 @@
 #include "tprintf.h"
 #include "lang/verify.h"
 #include "rsm_client.h"
+#include "rpc/rpc.h"
 #include "rpc/slock.h"
 #include "config.h"
 #include "tprintf.h"
@@ -100,7 +101,8 @@ recoverythread(void *x)
 
 rsm::rsm(std::string _first, std::string _me)
   : stf(0), primary(_first), insync (false), inviewchange (true), vid_commit(0),
-    partitioned (false), dopartition(false), break1(false), break2(false)
+    partitioned (false), dopartition(false), break1(false), break2(false),
+    _backup_unfinished()
 {
   pthread_t th;
 
@@ -211,6 +213,19 @@ rsm::sync_with_backups()
   // Wait until
   //   - all backups in view vid_insync are synchronized
   //   - or there is a committed viewchange
+  _backup_unfinished.clear();
+  const std::vector<std::string> & nodes = cfg->get_view(vid_insync);
+  tprintf("primary sync start, vid_insync: %u.\n", vid_insync);
+  for (const std::string & n : nodes) {
+    if (n != cfg->myaddr())_backup_unfinished.emplace(n);
+  }
+  while (!_backup_unfinished.empty() && vid_insync == vid_commit) {
+    timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    ts.tv_sec += 5;
+    pthread_cond_timedwait(&sync_cond, &rsm_mutex, &ts);
+  }
+  tprintf("primary sync finished.\n");
   insync = false;
   return true;
 }
@@ -224,9 +239,21 @@ rsm::sync_with_primary()
   // You fill this in for Lab 7
   // Keep synchronizing with primary until the synchronization succeeds,
   // or there is a commited viewchange
-  return true;
-}
+  bool success = false;
+  while (!success && vid_commit == vid_insync) {
+    success = statetransfer(m);
+    tprintf("rsm::sync_with_primary sync with %s ret %d vid_commit:%u insync:%u\n"
+        , m.c_str(), success, vid_commit, vid_insync);
+    if (!success) {
+      sleep(5);
+    }
+  }
+  tprintf("rsm::sync_with_primary sync with %s success.\n", m.c_str());
+  success =  statetransferdone(m);
 
+  tprintf("rsm::sync_with_primary send transfer done to %s,\n", m.c_str());
+  return success;
+}
 
 /**
  * Call to transfer state from m to the local node.
@@ -245,7 +272,7 @@ rsm::statetransfer(std::string m)
   rpcc *cl = h.safebind();
   if (cl) {
     ret = cl->call(rsm_protocol::transferreq, cfg->myaddr(),
-                             last_myvs, vid_insync, r, rpcc::to(1000));
+                             last_myvs, vid_insync, r, rpcc::to(1200));
   }
   VERIFY(pthread_mutex_lock(&rsm_mutex)==0);
   if (cl == 0 || ret != rsm_protocol::OK) {
@@ -266,6 +293,21 @@ bool
 rsm::statetransferdone(std::string m) {
   // You fill this in for Lab 7
   // - Inform primary that this slave has synchronized for vid_insync
+  handle h(m);
+  tprintf("rsm::statetransferdone transfer from %s done.\n", m.c_str());
+  VERIFY(pthread_mutex_unlock(&rsm_mutex) == 0);
+  int ret, r;
+  rpcc * cl = h.safebind();
+  if (cl) {
+    ret = cl->call(rsm_protocol::transferdonereq, cfg->myaddr(),
+        vid_insync, r, rpcc::to(12000));
+  }
+  VERIFY(pthread_mutex_lock(&rsm_mutex) == 0);
+  if (cl == 0 || ret != rsm_protocol::OK) {
+    tprintf("rsm::statetransferdone send done req to %s failed.\n", m.c_str());
+    return false;
+  }
+
   return true;
 }
 
@@ -305,6 +347,10 @@ rsm::commit_change(unsigned vid)
 {
   ScopedLock ml(&rsm_mutex);
   commit_change_wo(vid);
+
+  if (cfg->ismember(cfg->myaddr(), vid_commit)) {
+    breakpoint2();
+  }
 }
 
 void
@@ -363,14 +409,14 @@ rsm::client_invoke(int procno, std::string req, std::string &r)
       tprintf("client_invoke: proc: %x. not primary.\n", procno);
       return rsm_client_protocol::NOTPRIMARY;
     }
-    vs = this->myvs;
-    this->myvs.seqno++;
     nodes = cfg->get_view(vid_commit);
     tprintf("client_invoke: proc: %x. get nodes %lu.\n", procno, nodes.size());
   }
   tprintf("client_invoke: member size: %lu.\n", nodes.size());
   {
     ScopedLock l(&invoke_mutex);
+    vs = this->myvs;
+    this->myvs.seqno++;
     for (std::string & cli : nodes) {
       tprintf("client__invoke: call invoke: slave:%s proc: %x. vid: %u, seqno: %u\n",
           cli.c_str(), procno, vs.vid, vs.seqno);
@@ -386,11 +432,13 @@ rsm::client_invoke(int procno, std::string req, std::string &r)
             cli.c_str(), ret, r);
         return rsm_protocol::BUSY;
       }
+      breakpoint1();
+      partition1();
     }
   }
   std::string res;
   execute(procno, req, res);
-  r.swap(res);
+  r.assign(res);
   last_myvs.seqno++;
   return ret;
 }
@@ -407,6 +455,7 @@ rsm::invoke(int proc, viewstamp vs, std::string req, int &r)
 {
   rsm_protocol::status ret = rsm_protocol::OK;
 
+  r = 0;
   // You fill this in for Lab 7
   ScopedLock l(&rsm_mutex);
   tprintf("slave invoke: proc:%u, vid:%u, seqno:%u.\n", proc, vs.vid, vs.seqno);
@@ -427,6 +476,7 @@ rsm::invoke(int proc, viewstamp vs, std::string req, int &r)
   std::string res;
   execute(proc, req, res);
   last_myvs.seqno++;
+  breakpoint1();
 
   return ret;
 }
@@ -444,11 +494,14 @@ rsm_protocol::transferres &r)
   tprintf("transferreq from %s (%d,%d) vs (%d,%d)\n", src.c_str(),
 	 last.vid, last.seqno, last_myvs.vid, last_myvs.seqno);
   if (!insync || vid != vid_insync) {
+    tprintf("transferreq from %s BUSY insync:%d, vid:%u(%u expected).\n",
+        src.c_str(), insync, vid, vid_insync);
      return rsm_protocol::BUSY;
   }
   if (stf && last != last_myvs)
     r.state = stf->marshal_state();
   r.last = last_myvs;
+  tprintf("transferreq from %s succeed.\n", src.c_str());
   return ret;
 }
 
@@ -457,15 +510,26 @@ rsm_protocol::transferres &r)
   * for view vid
   */
 rsm_protocol::status
-rsm::transferdonereq(std::string m, unsigned vid, int &)
+rsm::transferdonereq(std::string m, unsigned vid, int &r)
 {
   int ret = rsm_protocol::OK;
+  r = 0;
   ScopedLock ml(&rsm_mutex);
   // You fill this in for Lab 7
   // - Return BUSY if I am not insync, or if the slave is not synchronizing
   //   for the same view with me
   // - Remove the slave from the list of unsynchronized backups
   // - Wake up recovery thread if all backups are synchronized
+  if (!insync || vid != vid_insync) {
+    r = rsm_protocol::BUSY;
+    return rsm_protocol::BUSY;
+  }
+
+  _backup_unfinished.erase(m);
+  if (_backup_unfinished.empty()) {
+    pthread_cond_signal(&sync_cond);
+  }
+
   return ret;
 }
 
